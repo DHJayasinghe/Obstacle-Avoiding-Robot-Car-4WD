@@ -1,4 +1,4 @@
-#include <AFMotor.h>      //add Adafruit Motor Shield library
+#include <AFMotor.h> //add Adafruit Motor Shield library
 #include <Servo.h>        //add Servo Motor library            
 #include <NewPing.h>      //add Ultrasonic sensor library
 
@@ -7,10 +7,14 @@
 #define SERVO1_PIN 10 // Digital Pin # 10 on the Motor Drive Shield for the Servo motor
 
 #define MAX_DISTANCE 300 // sets maximum useable sensor measuring distance to 300cm
-#define MAX_SPEED 160 // sets speed of DC traction motors to 150/250 or about 70% of full speed - to get power drain down.
-#define MAX_SPEED_OFFSET 40 // this sets offset to allow for differences between the two DC traction motors
-#define COLL_DIST 30 // sets distance at which robot stops and reverses to 30cm
+#define MAX_SPEED 90 // sets speed of DC traction motors to 150/250 or about 70% of full speed - to get power drain down.
+#define MAX_SPEED_OFFSET 30 // 40 this sets offset to allow for differences between the two DC traction motors
+#define COLL_DIST 30 // sets distance at which robot stops and reverses to 30cm (collision distance)
 #define TURN_DIST COLL_DIST+20 // sets distance at which robot veers away from object
+
+#define FRONT_RIGHT_BARRIER_PIN 16 // right obstacle detection sensor (Infrared barrier sensor)
+#define FRONT_LEFT_BARRIER_PIN 17 // left obstacle detection sensor (Infrared barrier sensor)
+
 NewPing sonar(TRIG_PIN, ECHO_PIN, MAX_DISTANCE); // sets up sensor library to use the correct pins to measure distance.
 
 AF_DCMotor leftMotor1(1, MOTOR12_1KHZ); // create motor #1 using M1 output on Motor Drive Shield, set to 1kHz PWM frequency
@@ -26,8 +30,11 @@ int speedSet = 0;
 
 //-------------------------------------------- SETUP LOOP ----------------------------------------------------------------------------
 void setup() {
+  Serial.begin(9600);
   myservo.attach(SERVO1_PIN);  // attaches the servo pin for SERVO_1 on the Motor Drive Shield to the servo object
   myservo.write(90); // tells the servo to position at 90-degrees ie. facing forward.
+  pinMode(FRONT_RIGHT_BARRIER_PIN, INPUT);
+  pinMode(FRONT_LEFT_BARRIER_PIN, INPUT);
   delay(1000); // delay for one seconds
 }
 //------------------------------------------------------------------------------------------------------------------------------------
@@ -36,8 +43,11 @@ void setup() {
 void loop() {
   myservo.write(90);  // move eyes forward
   delay(90);
+  bool isFrObstacled = digitalRead(FRONT_RIGHT_BARRIER_PIN); // if front right has obstacle
+  bool isFlObstacled = digitalRead(FRONT_LEFT_BARRIER_PIN); // if front left has obstacle
   curDist = readPing();   // read distance
-  if (curDist < COLL_DIST) {
+
+  if (curDist < COLL_DIST || isFrObstacled==LOW || isFlObstacled==LOW) {
     changePath(); // if forward is blocked change direction
   }
   moveForward();  // move forward
@@ -57,17 +67,18 @@ void changePath() {
   delay(500);
   myservo.write(90); //return to center
   delay(100);
-  compareDistance();
+
+  compareDistance(leftDistance, rightDistance);
 }
 
 
-void compareDistance()   // find the longest distance
+void compareDistance(int leftDist, int rightDist)  // find the longest distance
 {
-  if (leftDistance > rightDistance) //if left is less obstructed
+  if (leftDist > rightDist) //if left is less obstructed
   {
     turnLeft();
   }
-  else if (rightDistance > leftDistance) //if right is less obstructed
+  else if (rightDist > leftDist) //if right is less obstructed
   {
     turnRight();
   }
@@ -79,11 +90,11 @@ void compareDistance()   // find the longest distance
 
 
 //-------------------------------------------------------------------------------------------------------------------------------------
-
 int readPing() { // read the ultrasonic sensor distance
   delay(70);
-  unsigned int uS = sonar.ping();
+  unsigned int uS = sonar.ping_median();
   int cm = uS / US_ROUNDTRIP_CM;
+  // Serial.println(cm);
   return cm;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------
